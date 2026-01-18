@@ -7,6 +7,8 @@ export interface VideoData {
     originalSize: number;
     transcription: Transcription;
     summary: VideoSummary;
+    parts?: string[]; // Para videos divididos en partes (Supabase 50MB limit)
+    youtubeUrl?: string; // Link de YouTube opcional
     createdAt: string;
 }
 

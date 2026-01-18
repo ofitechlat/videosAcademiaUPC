@@ -1,21 +1,42 @@
 'use client';
-import { Play, FileText, List, Sparkles } from 'lucide-react';
+import { Play, FileText, List, Sparkles, Link as LinkIcon, Check } from 'lucide-react';
+import { useState } from 'react';
 import { VideoSummary } from '../types';
 
 interface SummaryPanelProps {
     summary: VideoSummary;
     currentTime: number;
     videoDuration: number; // Nueva prop
+    youtubeUrl?: string; // Nueva prop para generar links
     onTimestampClick: (time: number) => void;
 }
 
-export default function SummaryPanel({ summary, currentTime, videoDuration, onTimestampClick }: SummaryPanelProps) {
+export default function SummaryPanel({ summary, currentTime, videoDuration, youtubeUrl, onTimestampClick }: SummaryPanelProps) {
+    const [copiedId, setCopiedId] = useState<string | null>(null);
+
     // Filtrar alucinaciones: Si el timestamp es mayor a la duración real del video (+5s margen), no lo mostramos.
     // Solo filtrarmos si videoDuration > 0 (ya cargó metadata)
     const validSections = summary.sections.filter(section => {
         if (videoDuration === 0) return true;
         return section.timestamp < (videoDuration + 5);
     });
+
+    const handleCopyLink = (e: React.MouseEvent, timestamp: number, id: string) => {
+        e.stopPropagation();
+        if (!youtubeUrl) return;
+
+        // Limpiar URL base (quitar parámetros existentes)
+        const baseUrl = youtubeUrl.split('?')[0].split('&')[0];
+        const videoId = youtubeUrl.match(/(?:youtu\.be\/|youtube\.com(?:\/embed\/|\/v\/|\/watch\?v=|\/user\/\S+|\/ytscreeningroom\?v=))([\w\-]{11})/)?.[1];
+
+        const timestampUrl = videoId
+            ? `https://youtu.be/${videoId}?t=${Math.floor(timestamp)}`
+            : `${youtubeUrl}${youtubeUrl.includes('?') ? '&' : '?'}t=${Math.floor(timestamp)}`;
+
+        navigator.clipboard.writeText(timestampUrl);
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+    };
 
     return (
         <div className="h-full overflow-y-auto bg-white p-6 custom-scrollbar">
@@ -55,9 +76,20 @@ export default function SummaryPanel({ summary, currentTime, videoDuration, onTi
                                             }`}
                                     >
                                         <div className="flex items-center justify-between mb-2">
-                                            <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                                                {new Date(section.timestamp * 1000).toISOString().substr(14, 5)}
-                                            </span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                                                    {new Date(section.timestamp * 1000).toISOString().substr(14, 5)}
+                                                </span>
+                                                {youtubeUrl && (
+                                                    <button
+                                                        onClick={(e) => handleCopyLink(e, section.timestamp, section.id)}
+                                                        className="p-1 hover:bg-blue-200 rounded text-blue-600 transition-colors"
+                                                        title="Copiar link con tiempo"
+                                                    >
+                                                        {copiedId === section.id ? <Check size={12} /> : <LinkIcon size={12} />}
+                                                    </button>
+                                                )}
+                                            </div>
                                             {isActive && <span className="text-[10px] font-black text-blue-500 animate-pulse">REPRODUCIENDO</span>}
                                         </div>
                                         <h3 className="font-bold text-gray-800 mb-1">{section.title}</h3>

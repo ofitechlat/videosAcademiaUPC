@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Large files and uploads
+backend/processed/
+backend/uploads/
+public/uploads/
+*.mkv
+*.mp4
+*.avi
+*.mov
+dev_output.log

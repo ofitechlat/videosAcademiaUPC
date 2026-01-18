@@ -1,23 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  async headers() {
-    return [
-      {
-        source: '/(.*)',
-        headers: [
-          {
-            key: 'Cross-Origin-Embedder-Policy',
-            value: 'require-corp',
-          },
-          {
-            key: 'Cross-Origin-Opener-Policy',
-            value: 'same-origin',
-          },
-        ],
-      },
-    ];
-  },
+  // NOTA: Se eliminaron los headers COEP/COOP porque bloqueaban los iframes de YouTube
+  // Si necesitas SharedArrayBuffer para FFmpeg.wasm en el futuro, considera usar
+  // credentialless en lugar de require-corp, o excluir rutas específicas
 };
 
 export default nextConfig;

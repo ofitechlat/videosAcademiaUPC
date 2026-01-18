@@ -7,6 +7,7 @@ import { VideoData, UploadProgress } from '../types';
 export default function VideoUploader({ onComplete }: { onComplete: (id: string) => void }) {
     const [status, setStatus] = useState<UploadProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [youtubeUrl, setYoutubeUrl] = useState('');
 
     const processVideo = async (file: File) => {
         try {
@@ -43,9 +44,18 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
                 xhr.onreadystatechange = () => {
                     if (xhr.readyState === 4) {
                         if (xhr.status === 200) {
-                            resolve(JSON.parse(xhr.responseText));
+                            try {
+                                resolve(JSON.parse(xhr.responseText));
+                            } catch (e) {
+                                reject(new Error('Error al leer la respuesta del servidor (JSON inválido)'));
+                            }
                         } else {
-                            reject(new Error(`Error del servidor: ${xhr.statusText}`));
+                            try {
+                                const errorData = JSON.parse(xhr.responseText);
+                                reject(new Error(errorData.detail || `Error ${xhr.status}: ${xhr.statusText}`));
+                            } catch (e) {
+                                reject(new Error(`Error del servidor: ${xhr.statusText}`));
+                            }
                         }
                     }
                 };
@@ -58,15 +68,28 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
 
             const result = await responsePromise;
 
-            setStatus({ stage: 'summarizing', progress: 95, message: 'Video procesado. Descargando resultados...' });
-
-            // Mapeo de datos Backend -> Frontend y descarga de blob para persistencia
             const API_BASE = 'http://localhost:8000';
-            const videoUrl = `${API_BASE}${result.videoUrl}`;
-            const videoBlobResp = await fetch(videoUrl);
-            const videoBlob = await videoBlobResp.blob();
+            const parts = result.parts || [result.videoUrl.replace('/static/', '')];
 
-            // Mapeo Transcripcion (start/end -> startTime/endTime)
+            // Descargar todas las partes (blobs) SOLO si no hay YouTube
+            const partBlobs: { name: string, blob: Blob }[] = [];
+            if (!youtubeUrl) {
+                setStatus({ stage: 'summarizing', progress: 95, message: 'Descargando partes para almacenamiento local...' });
+                for (let i = 0; i < parts.length; i++) {
+                    setStatus({
+                        stage: 'summarizing',
+                        progress: 95 + (i / parts.length * 3),
+                        message: `Descargando parte ${i + 1} de ${parts.length}...`
+                    });
+                    const resp = await fetch(`${API_BASE}/static/${parts[i]}`);
+                    const blob = await resp.blob();
+                    partBlobs.push({ name: parts[i], blob });
+                }
+            } else {
+                setStatus({ stage: 'summarizing', progress: 97, message: 'Vinculando con YouTube...' });
+            }
+
+            // Mapeo Transcripcion
             const mappedTranscription = {
                 text: result.transcription.text,
                 segments: result.transcription.segments.map((seg: any, idx: number) => ({
@@ -77,7 +100,7 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
                 }))
             };
 
-            // Mapeo Resumen (summary -> fullSummary, start -> timestamp)
+            // Mapeo Resumen
             const mappedSummary = {
                 fullSummary: result.summary.summary,
                 sections: result.summary.sections.map((sec: any, idx: number) => ({
@@ -93,26 +116,32 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
             const videoData: VideoData = {
                 id: result.videoId,
                 title: result.title,
-                duration: 0,
+                duration: result.duration || 0,
                 thumbnail: '',
                 originalSize: file.size,
-                compressedSize: videoBlob.size,
+                compressedSize: partBlobs.length > 0 ? partBlobs.reduce((acc, p) => acc + p.blob.size, 0) : 0,
                 transcription: mappedTranscription,
                 summary: mappedSummary,
+                parts: youtubeUrl ? [] : parts,
+                youtubeUrl: youtubeUrl || undefined,
                 createdAt: new Date().toISOString()
             };
 
-            setStatus({ stage: 'summarizing', progress: 98, message: 'Guardando video en la nube (Supabase)...' });
-            await saveVideo(videoData, videoBlob);
-
+            setStatus({ stage: 'summarizing', progress: 98, message: 'Guardando metadatos en Supabase...' });
+            await saveVideo(videoData, null, partBlobs.length > 0 ? partBlobs : undefined);
             setStatus({ stage: 'complete', progress: 100, message: '¡Procesamiento completado!' });
 
-            // Pequeño delay para que el usuario vea el check verde
             setTimeout(() => onComplete(result.videoId), 1500);
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message || 'Error al procesar el video');
+            let userMessage = err.message || 'Error al procesar el video';
+
+            if (err.message?.includes('exceeded the maximum allowed size') || err.name === 'StorageApiError') {
+                userMessage = '❌ El video es demasiado pesado para la configuración actual de Supabase. Aumenta el límite en el Dashboard de Supabase (Settings -> Storage) o sube un video más corto.';
+            }
+
+            setError(userMessage);
             setStatus(null);
         }
     };
@@ -124,13 +153,25 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
                     <div className="p-6 bg-blue-600/10 rounded-3xl text-blue-500 group-hover/uploader:scale-110 group-hover/uploader:bg-blue-600/20 transition-all duration-500">
                         <Upload size={48} strokeWidth={2.5} />
                     </div>
-                    <div className="text-center">
+                    <div className="text-center w-full">
                         <h3 className="text-2xl font-bold text-white tracking-tight">Cargar nuevo video</h3>
-                        <p className="text-gray-400 mt-2 max-w-xs mx-auto">Sube cualquier video para obtener un resumen inteligente estructurado</p>
-                        <div className="flex items-center justify-center gap-2 mt-4">
+                        <p className="text-gray-400 mt-2 max-w-xs mx-auto mb-6">Sube el archivo para procesar la IA y conecta su link de YouTube</p>
+
+                        {/* Input de YouTube */}
+                        <div className="max-w-md mx-auto mb-8 bg-black/40 p-1.5 rounded-2xl border border-white/5 focus-within:border-blue-500/50 transition-all group/yt">
+                            <input
+                                type="url"
+                                placeholder="Link de YouTube (Donde se subió este video)..."
+                                value={youtubeUrl}
+                                onChange={(e) => setYoutubeUrl(e.target.value)}
+                                className="w-full bg-transparent border-none focus:ring-0 text-sm text-white px-4 py-2 placeholder:text-gray-600"
+                            />
+                        </div>
+
+                        <div className="flex items-center justify-center gap-2 mb-4">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                             <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80">
-                                Motor Python & Gemini 3 Activos
+                                Motor Python & Gemini 3 Flash Pro Activos
                             </span>
                         </div>
                     </div>
