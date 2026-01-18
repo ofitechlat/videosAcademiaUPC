@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "F:\videos\editor ia\video-summary-app\backend\main.py", line 145, in process_video
+    print(f"✅ Transcripción completada ({len(transcription_data.get('segments', []))} segmentos)", flush=True)
+                                              ^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'list' object has no attribute 'get'
