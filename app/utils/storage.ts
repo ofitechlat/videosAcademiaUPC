@@ -36,7 +36,7 @@ export async function saveVideo(video: VideoData, blob: Blob | null, partBlobs?:
         console.log('☁️ Saving metadata to Supabase DB...', video.id);
         const { error: dbError } = await supabase
             .from('videos')
-            .insert({
+            .upsert({
                 id: video.id,
                 title: video.title,
                 duration: video.duration,
@@ -46,9 +46,10 @@ export async function saveVideo(video: VideoData, blob: Blob | null, partBlobs?:
                 transcription: video.transcription,
                 summary: video.summary,
                 parts: video.parts,
-                youtube_link: video.youtubeUrl, // Matched with user manual change
+                youtube_link: video.youtubeUrl,
+                processing_status: video.processingStatus || 'completed',
                 created_at: new Date().toISOString()
-            });
+            }, { onConflict: 'id' });
 
         if (dbError) throw dbError;
         console.log('✅ Video saved successfully to Supabase!');
@@ -100,6 +101,7 @@ export async function getVideo(id: string): Promise<{ video: VideoData; blob: Bl
             summary: videoRecord.summary,
             parts: videoRecord.parts,
             youtubeUrl: videoRecord.youtube_link,
+            processingStatus: videoRecord.processing_status,
             createdAt: videoRecord.created_at
         };
 
@@ -134,6 +136,8 @@ export async function listVideos(): Promise<VideoData[]> {
         summary: record.summary,
         parts: record.parts,
         youtubeUrl: record.youtube_link,
+        classId: record.class_id,
+        processingStatus: record.processing_status,
         createdAt: record.created_at
     }));
 }

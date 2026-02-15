@@ -38,6 +38,17 @@ export default function SummaryPanel({ summary, currentTime, videoDuration, yout
         setTimeout(() => setCopiedId(null), 2000);
     };
 
+    const formatTime = (seconds: any) => {
+        try {
+            if (!seconds || isNaN(seconds)) return "00:00";
+            const date = new Date(Number(seconds) * 1000);
+            if (isNaN(date.getTime())) return "00:00";
+            return date.toISOString().substr(14, 5);
+        } catch (e) {
+            return "00:00";
+        }
+    };
+
     return (
         <div className="h-full overflow-y-auto bg-white p-6 custom-scrollbar">
             <div className="space-y-8">
@@ -78,7 +89,7 @@ export default function SummaryPanel({ summary, currentTime, videoDuration, yout
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                                                    {new Date(section.timestamp * 1000).toISOString().substr(14, 5)}
+                                                    {formatTime(section.timestamp)}
                                                 </span>
                                                 {youtubeUrl && (
                                                     <button

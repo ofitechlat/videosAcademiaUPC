@@ -1,137 +1,99 @@
 'use client';
 import { useState } from 'react';
-import { Upload, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, Loader2, CheckCircle2, AlertCircle, Link as LinkIcon, Youtube } from 'lucide-react';
 import { saveVideo } from '../utils/storage';
 import { VideoData, UploadProgress } from '../types';
 
-export default function VideoUploader({ onComplete }: { onComplete: (id: string) => void }) {
+export default function VideoUploader({ onUploadComplete }: { onUploadComplete: (id: string) => void }) {
     const [status, setStatus] = useState<UploadProgress | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [youtubeUrl, setYoutubeUrl] = useState('');
 
-    const processVideo = async (file: File) => {
+    const processVideo = async (file?: File) => {
         try {
             setError(null);
-            setStatus({ stage: 'compressing', progress: 0, message: 'Iniciando subida al servidor...' });
 
-            const formData = new FormData();
-            formData.append('file', file);
-
-            // Usamos XMLHttpRequest para poder rastrear el progreso de subida real
-            const xhr = new XMLHttpRequest();
-
-            xhr.upload.onprogress = (event) => {
-                if (event.lengthComputable) {
-                    const percent = Math.round((event.loaded / event.total) * 40);
-                    setStatus({
-                        stage: 'compressing',
-                        progress: percent,
-                        message: `Subiendo video... ${percent}%`
-                    });
-                }
-            };
-
-            // FIX: Usar onload para cambiar estado SOLO cuando termine la subida
-            xhr.upload.onload = () => {
-                setStatus({
-                    stage: 'transcribing',
-                    progress: 45,
-                    message: 'Subida completa. Procesando en Backend (Audio -> Gemini)...'
-                });
-            };
-
-            const responsePromise = new Promise<any>((resolve, reject) => {
-                xhr.onreadystatechange = () => {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
-                            try {
-                                resolve(JSON.parse(xhr.responseText));
-                            } catch (e) {
-                                reject(new Error('Error al leer la respuesta del servidor (JSON inválido)'));
-                            }
-                        } else {
-                            try {
-                                const errorData = JSON.parse(xhr.responseText);
-                                reject(new Error(errorData.detail || `Error ${xhr.status}: ${xhr.statusText}`));
-                            } catch (e) {
-                                reject(new Error(`Error del servidor: ${xhr.statusText}`));
-                            }
-                        }
-                    }
-                };
-            });
-
-            xhr.open('POST', 'http://localhost:8000/process');
-            xhr.send(formData);
-
-            // Eliminamos el setStatus manual aquí para evitar race condition
-
-            const result = await responsePromise;
-
-            const API_BASE = 'http://localhost:8000';
-            const parts = result.parts || [result.videoUrl.replace('/static/', '')];
-
-            // Descargar todas las partes (blobs) SOLO si no hay YouTube
-            const partBlobs: { name: string, blob: Blob }[] = [];
-            if (!youtubeUrl) {
-                setStatus({ stage: 'summarizing', progress: 95, message: 'Descargando partes para almacenamiento local...' });
-                for (let i = 0; i < parts.length; i++) {
-                    setStatus({
-                        stage: 'summarizing',
-                        progress: 95 + (i / parts.length * 3),
-                        message: `Descargando parte ${i + 1} de ${parts.length}...`
-                    });
-                    const resp = await fetch(`${API_BASE}/static/${parts[i]}`);
-                    const blob = await resp.blob();
-                    partBlobs.push({ name: parts[i], blob });
-                }
-            } else {
-                setStatus({ stage: 'summarizing', progress: 97, message: 'Vinculando con YouTube...' });
+            // VALIDATION
+            if (!file && !youtubeUrl) {
+                setError("Por favor selecciona un archivo o ingresa un link de YouTube.");
+                return;
             }
 
-            // Mapeo Transcripcion
-            const mappedTranscription = {
-                text: result.transcription.text,
-                segments: result.transcription.segments.map((seg: any, idx: number) => ({
-                    id: `seg-${idx}`,
-                    startTime: seg.start,
-                    endTime: seg.end,
-                    text: seg.text
-                }))
-            };
+            // MODE A: YOUTUBE ONLY
+            if (!file && youtubeUrl) {
+                setStatus({ stage: 'compressing', progress: 10, message: 'Iniciando descarga de YouTube...' });
 
-            // Mapeo Resumen
-            const mappedSummary = {
-                fullSummary: result.summary.summary,
-                sections: result.summary.sections.map((sec: any, idx: number) => ({
-                    id: `sec-${idx}`,
-                    title: sec.title,
-                    timestamp: sec.start,
-                    duration: 0,
-                    content: sec.content
-                })),
-                keyPoints: result.summary.keyPoints || []
-            };
+                const response = await fetch('http://localhost:8000/api/process-youtube', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url: youtubeUrl })
+                });
 
-            const videoData: VideoData = {
-                id: result.videoId,
-                title: result.title,
-                duration: result.duration || 0,
-                thumbnail: '',
-                originalSize: file.size,
-                compressedSize: partBlobs.length > 0 ? partBlobs.reduce((acc, p) => acc + p.blob.size, 0) : 0,
-                transcription: mappedTranscription,
-                summary: mappedSummary,
-                parts: youtubeUrl ? [] : parts,
-                youtubeUrl: youtubeUrl || undefined,
-                createdAt: new Date().toISOString()
-            };
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.detail || 'Error en procesamiento de YouTube');
+                }
 
-            setStatus({ stage: 'summarizing', progress: 98, message: 'Guardando metadatos en Supabase...' });
-            await saveVideo(videoData, null, partBlobs.length > 0 ? partBlobs : undefined);
-            setStatus({ stage: 'complete', progress: 100, message: '¡Procesamiento completado!' });
+                const result = await response.json();
+                await handleSuccess(result, null);
+                return;
+            }
 
-            setTimeout(() => onComplete(result.videoId), 1500);
+            // MODE B: FILE UPLOAD (Legacy + Hybrid)
+            if (file) {
+                setStatus({ stage: 'compressing', progress: 0, message: 'Conectando con motor de IA...' });
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.onprogress = (event) => {
+                    if (event.lengthComputable) {
+                        const percent = Math.round((event.loaded / event.total) * 40);
+                        setStatus({
+                            stage: 'compressing',
+                            progress: percent,
+                            message: `Cargando en IA Local... ${percent}%`
+                        });
+                    }
+                };
+
+                xhr.upload.onload = () => {
+                    setStatus({
+                        stage: 'transcribing',
+                        progress: 45,
+                        message: 'Subida completa. Procesando en Backend (Audio -> Gemini)...'
+                    });
+                };
+
+                const responsePromise = new Promise<any>((resolve, reject) => {
+                    xhr.onreadystatechange = () => {
+                        if (xhr.readyState === 4) {
+                            if (xhr.status === 200) {
+                                try {
+                                    resolve(JSON.parse(xhr.responseText));
+                                } catch (e) {
+                                    reject(new Error('Error al leer la respuesta del servidor (JSON inválido)'));
+                                }
+                            } else {
+                                try {
+                                    const errorData = JSON.parse(xhr.responseText);
+                                    reject(new Error(errorData.detail || `Error ${xhr.status}: ${xhr.statusText}`));
+                                } catch (e) {
+                                    reject(new Error(`Error del servidor: ${xhr.statusText}`));
+                                }
+                            }
+                        }
+                    };
+                });
+
+                xhr.open('POST', 'http://localhost:8000/process');
+                xhr.send(formData);
+
+                const result = await responsePromise;
+                await handleSuccess(result, file);
+            }
 
         } catch (err: any) {
             console.error(err);
@@ -146,45 +108,143 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
         }
     };
 
+    const handleSuccess = async (result: any, file: File | null) => {
+        const API_BASE = 'http://localhost:8000';
+        const parts = result.parts || [];
+
+        // Determinar URL final (Prioridad: YouTube Input > Result URL > Parts)
+        const finalYoutubeUrl = youtubeUrl || (result.videoUrl.includes('http') ? result.videoUrl : undefined);
+
+        // HYBRID MODE LOGIC:
+        // Si tenemos URL de YouTube (ya sea por input manual o resultado), NO guardamos blobs en Supabase.
+        // Solo descargamos/guardamos blobs si NO hay YouTube link.
+        const useSupabaseStorage = !finalYoutubeUrl;
+
+        const partBlobs: { name: string, blob: Blob }[] = [];
+
+        if (useSupabaseStorage && parts.length > 0) {
+            setStatus({ stage: 'summarizing', progress: 95, message: 'Descargando partes para almacenamiento local...' });
+            for (let i = 0; i < parts.length; i++) {
+                setStatus({
+                    stage: 'summarizing',
+                    progress: 95 + (i / parts.length * 3),
+                    message: `Descargando parte ${i + 1} de ${parts.length}...`
+                });
+                const resp = await fetch(`${API_BASE}/static/${parts[i]}`);
+                const blob = await resp.blob();
+                partBlobs.push({ name: parts[i], blob });
+            }
+        } else if (finalYoutubeUrl) {
+            setStatus({ stage: 'summarizing', progress: 97, message: 'Vinculando con YouTube (Ahorrando espacio)...' });
+        } else {
+            setStatus({ stage: 'summarizing', progress: 97, message: 'Finalizando...' });
+        }
+
+        // Mapeo Transcripcion
+        const mappedTranscription = result.transcription ? {
+            text: result.transcription.text,
+            segments: (result.transcription.segments || []).map((seg: any, idx: number) => ({
+                id: `seg-${idx}`,
+                startTime: seg.start,
+                endTime: seg.end,
+                text: seg.text
+            }))
+        } : { text: '', segments: [] };
+
+        // Mapeo Resumen
+        const mappedSummary = result.summary ? {
+            fullSummary: result.summary.summary,
+            sections: (result.summary.sections || []).map((sec: any, idx: number) => ({
+                id: `sec-${idx}`,
+                title: sec.title,
+                timestamp: sec.start,
+                duration: 0,
+                content: sec.content
+            })),
+            keyPoints: result.summary.keyPoints || []
+        } : { fullSummary: '', sections: [], keyPoints: [] };
+
+        const videoData: VideoData = {
+            id: result.videoId,
+            title: result.title,
+            duration: result.duration || 0,
+            thumbnail: '',
+            originalSize: file ? file.size : 0,
+            compressedSize: partBlobs.length > 0 ? partBlobs.reduce((acc, p) => acc + p.blob.size, 0) : 0,
+            transcription: mappedTranscription,
+            summary: mappedSummary,
+            parts: useSupabaseStorage ? parts : [], // Si hay YouTube, vaciamos parts
+            youtubeUrl: finalYoutubeUrl,
+            processingStatus: result.processing_status || 'completed',
+            createdAt: new Date().toISOString()
+        };
+
+        setStatus({ stage: 'summarizing', progress: 98, message: 'Guardando metadatos en Supabase...' });
+        await saveVideo(videoData, null, partBlobs.length > 0 ? partBlobs : undefined);
+        setStatus({ stage: 'complete', progress: 100, message: '¡Procesamiento completado!' });
+
+        setTimeout(() => onUploadComplete(result.videoId), 1500);
+    };
+
     return (
         <div className="max-w-2xl mx-auto p-10 border-2 border-dashed border-white/10 rounded-[2.5rem] bg-[#16181a] shadow-2xl hover:border-blue-500/50 transition-all duration-500 group/uploader">
             {!status ? (
                 <div className="flex flex-col items-center justify-center space-y-6">
                     <div className="p-6 bg-blue-600/10 rounded-3xl text-blue-500 group-hover/uploader:scale-110 group-hover/uploader:bg-blue-600/20 transition-all duration-500">
-                        <Upload size={48} strokeWidth={2.5} />
+                        {youtubeUrl ? <Youtube size={48} strokeWidth={1.5} /> : <Upload size={48} strokeWidth={2.5} />}
                     </div>
                     <div className="text-center w-full">
                         <h3 className="text-2xl font-bold text-white tracking-tight">Cargar nuevo video</h3>
-                        <p className="text-gray-400 mt-2 max-w-xs mx-auto mb-6">Sube el archivo para procesar la IA y conecta su link de YouTube</p>
+                        <p className="text-gray-400 mt-2 max-w-xs mx-auto mb-6">Sube un archivo o pega un link de YouTube para procesar con IA</p>
 
                         {/* Input de YouTube */}
-                        <div className="max-w-md mx-auto mb-8 bg-black/40 p-1.5 rounded-2xl border border-white/5 focus-within:border-blue-500/50 transition-all group/yt">
+                        <div className="max-w-md mx-auto mb-4 bg-black/40 p-1.5 rounded-2xl border border-white/5 focus-within:border-blue-500/50 transition-all group/yt flex items-center gap-2">
+                            <div className="pl-3 text-red-500"><Youtube size={20} /></div>
                             <input
                                 type="url"
-                                placeholder="Link de YouTube (Donde se subió este video)..."
+                                placeholder="Pegar Link de YouTube aquí..."
                                 value={youtubeUrl}
                                 onChange={(e) => setYoutubeUrl(e.target.value)}
-                                className="w-full bg-transparent border-none focus:ring-0 text-sm text-white px-4 py-2 placeholder:text-gray-600"
+                                className="w-full bg-transparent border-none focus:ring-0 text-sm text-white px-2 py-3 placeholder:text-gray-600"
                             />
                         </div>
 
-                        <div className="flex items-center justify-center gap-2 mb-4">
+
+                        {/* Botón Acción Principal */}
+                        <div className="flex flex-col gap-4 items-center w-full">
+                            {/* Selector de Archivo (Siempre visible) */}
+                            <label className="inline-block px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold cursor-pointer transition-all hover:shadow-xl hover:shadow-blue-900/40 active:scale-95">
+                                {youtubeUrl ? 'Cargar VIDEO LOCAL (Más Rápido)' : 'Seleccionar archivo Local'}
+                                <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="video/*,.mkv,.m4v"
+                                    onChange={(e) => e.target.files?.[0] && processVideo(e.target.files[0])}
+                                />
+                            </label>
+
+                            {/* Opción Link Only */}
+                            {youtubeUrl && (
+                                <div className="text-gray-500 text-sm font-medium">o</div>
+                            )}
+
+                            {youtubeUrl && (
+                                <button
+                                    onClick={() => processVideo()}
+                                    className="px-8 py-3.5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold transition-all hover:shadow-xl hover:shadow-red-900/40 active:scale-95 flex items-center gap-2"
+                                >
+                                    <Youtube size={18} /> Procesar SOLO Link (Descarga Lenta)
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="mt-8 flex items-center justify-center gap-2">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                             <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80">
-                                Motor Python & Gemini 3 Flash Pro Activos
+                                Sistema Listo • IA v2.5
                             </span>
                         </div>
                     </div>
-                    <label className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold cursor-pointer transition-all hover:shadow-xl hover:shadow-blue-900/40 active:scale-95">
-                        Seleccionar archivo
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept="video/*,.mkv,.m4v"
-                            onChange={(e) => e.target.files?.[0] && processVideo(e.target.files[0])}
-                        />
-                    </label>
-                    <p className="text-[10px] text-gray-600 font-medium uppercase tracking-tighter">MP4, MKV, AVI, MOV • Max 2GB</p>
                 </div>
             ) : (
                 <div className="space-y-8 py-4">
@@ -216,7 +276,7 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
 
                     <div className="grid grid-cols-4 gap-4 px-2">
                         {[
-                            { id: 'compressing', label: 'Subida' },
+                            { id: 'compressing', label: 'Carga/Descarga' },
                             { id: 'transcribing', label: 'IA Transcriber' },
                             { id: 'summarizing', label: 'IA Resumen' },
                             { id: 'complete', label: 'Listo' }
@@ -251,4 +311,3 @@ export default function VideoUploader({ onComplete }: { onComplete: (id: string)
         </div>
     );
 }
-

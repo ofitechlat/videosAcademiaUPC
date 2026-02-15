@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
         const result = await model.generateContent([
             `Transcribe this audio and provide timestamps for logical segments (every 2-3 minutes).

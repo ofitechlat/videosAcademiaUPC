@@ -1,214 +1,154 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import VideoUploader from "./components/VideoUploader";
-import { listVideos, deleteVideo } from "./utils/storage";
-import { VideoData } from "./types";
-import Login from "./components/Login";
-import { supabase } from "./utils/supabase";
+import { Users, GraduationCap, Shield, MessageCircle, BookOpen, Video } from "lucide-react";
 
-export default function Home() {
-  const [videos, setVideos] = useState<VideoData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+export default function LandingPage() {
   const router = useRouter();
-
-  useEffect(() => {
-    // 1. Verificar sesión inicial
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAdmin(!!session);
-    };
-    checkSession();
-
-    // 2. Suscribirse a cambios de autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAdmin(!!session);
-    });
-
-    loadVideos();
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  async function loadVideos() {
-    try {
-      setLoading(true);
-      const data = await listVideos();
-      // Ordenar por fecha: los más nuevos primero
-      setVideos(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
-    } catch (err) {
-      console.error("Error cargando videos:", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleDelete(id: string) {
-    if (!isAdmin) return;
-    if (confirm("¿Estás seguro de que quieres eliminar este video?")) {
-      await deleteVideo(id);
-      loadVideos();
-    }
-  }
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    setIsAdmin(false);
-  }
-
-  const filteredVideos = useMemo(() => {
-    if (!searchQuery.trim()) return videos;
-    const q = searchQuery.toLowerCase();
-    return videos.filter(v =>
-      v.title.toLowerCase().includes(q) ||
-      v.summary?.fullSummary?.toLowerCase().includes(q) ||
-      v.summary?.keyPoints?.some(kp => kp.toLowerCase().includes(q))
-    );
-  }, [videos, searchQuery]);
+  const whatsappNumber = "+50661943970";
+  const whatsappMessage = encodeURIComponent("Hola, me interesa información sobre las tutorías.");
 
   return (
     <main className="min-h-screen bg-[#0f1113] text-white">
-      {/* Navbar Premium */}
-      <header className="border-b border-white/5 bg-black/20 backdrop-blur-md sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+      {/* Hero Section */}
+      <header className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 via-purple-600/10 to-transparent" />
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
+
+        <nav className="relative z-10 max-w-6xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" /></svg>
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-900/30">
+              <GraduationCap size={28} />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">IA Video Summary</h1>
+            <div>
+              <h1 className="text-2xl font-bold">Academia UPC</h1>
+              <p className="text-xs text-gray-400">Tutorías Personalizadas</p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            {isAdmin ? (
-              <button
-                onClick={handleLogout}
-                className="text-sm font-medium text-gray-400 hover:text-red-400 transition-colors flex items-center gap-2"
-              >
-                Cerrar Sesión
-              </button>
-            ) : (
-              <Login onLogin={() => setIsAdmin(true)} />
-            )}
+          <div className="flex items-center gap-6">
+            <button
+              onClick={() => router.push('/student/login')}
+              className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+            >
+              <Users size={16} />
+              Portal Estudiante
+            </button>
+            <button
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-2 text-sm font-medium text-gray-400 hover:text-white transition-colors border-l border-white/10 pl-6"
+            >
+              <Shield size={16} />
+              Administrador
+            </button>
+          </div>
+        </nav>
+
+        <div className="relative z-10 max-w-6xl mx-auto px-6 py-20 text-center">
+          <h2 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-blue-100 to-purple-200 bg-clip-text text-transparent">
+            Aprende con los mejores tutores
+          </h2>
+          <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">
+            Tutorías individuales y grupales para alcanzar tus metas académicas.
+            Horarios flexibles adaptados a ti.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <button
+              onClick={() => router.push('/registro/talleres')}
+              className="group flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-emerald-900/30 transition-all transform hover:scale-105"
+            >
+              <Users size={24} />
+              Inscribirse a un Taller
+              <span className="text-emerald-300 group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/registro/objetivos')}
+              className="group flex items-center justify-center gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 px-8 py-4 rounded-2xl font-semibold text-lg shadow-xl shadow-blue-900/30 transition-all transform hover:scale-105"
+            >
+              <GraduationCap size={24} />
+              Cumplir una Meta
+              <span className="text-blue-300 group-hover:translate-x-1 transition-transform">→</span>
+            </button>
+
+            <button
+              onClick={() => router.push('/registro/estudiante')}
+              className="group flex items-center justify-center gap-3 bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 px-8 py-4 rounded-2xl font-semibold text-lg transition-all transform hover:scale-105"
+            >
+              <BookOpen size={24} className="text-blue-400" />
+              Tutoría Individual
+              <span className="text-gray-400 group-hover:translate-x-1 transition-transform">→</span>
+            </button>
           </div>
         </div>
       </header>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        {/* Panel de Administración (Privado) */}
-        {isAdmin && (
-          <section className="mb-20 animate-in fade-in slide-in-from-top-4 duration-1000">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold">Administrador</h2>
-              <p className="text-gray-400 mt-1">Sube y procesa nuevos videos para la academia</p>
-            </div>
-            <VideoUploader onComplete={loadVideos} />
-          </section>
-        )}
+      {/* Features Section */}
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <h3 className="text-3xl font-bold text-center mb-12">¿Por qué elegirnos?</h3>
 
-        {/* Galería Pública con Buscador */}
-        <section>
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
-            <div>
-              <h2 className="text-3xl font-bold">Explorar Contenido</h2>
-              <p className="text-gray-400 mt-1">Busca temas específicos dentro de los resúmenes</p>
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="bg-[#1a1c1e] rounded-3xl p-8 border border-white/5 hover:border-blue-500/30 transition-colors">
+            <div className="w-14 h-14 bg-blue-500/20 rounded-2xl flex items-center justify-center mb-6">
+              <Users className="text-blue-400" size={28} />
             </div>
-
-            <div className="relative w-full md:w-96 group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <svg className="w-5 h-5 text-gray-500 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                placeholder="Buscar en resúmenes, títulos..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-[#1a1c1e] border border-white/5 rounded-2xl py-4 pl-12 pr-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:bg-[#202225] transition-all shadow-2xl"
-              />
-            </div>
+            <h4 className="text-xl font-semibold mb-3">Tutores Expertos</h4>
+            <p className="text-gray-400">
+              Profesionales calificados con experiencia en sus áreas de especialización.
+            </p>
           </div>
 
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="bg-[#1a1c1e] aspect-video rounded-[2rem] animate-pulse" />
-              ))}
+          <div className="bg-[#1a1c1e] rounded-3xl p-8 border border-white/5 hover:border-purple-500/30 transition-colors">
+            <div className="w-14 h-14 bg-purple-500/20 rounded-2xl flex items-center justify-center mb-6">
+              <BookOpen className="text-purple-400" size={28} />
             </div>
-          ) : filteredVideos.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-20">
-              {filteredVideos.map((video) => (
-                <div
-                  key={video.id}
-                  className="group bg-[#16181a] rounded-[2rem] overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all hover:shadow-2xl hover:shadow-blue-600/5 flex flex-col"
-                >
-                  <div
-                    className="aspect-video bg-gray-900 relative cursor-pointer overflow-hidden"
-                    onClick={() => router.push(`/watch/${encodeURIComponent(video.id)}`)}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center justify-center">
-                      <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center scale-90 group-hover:scale-100 transition-transform shadow-xl">
-                        <svg className="w-8 h-8 text-white ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M4.018 14L14.41 8 4.018 2v12z" /></svg>
-                      </div>
-                    </div>
-                    {/* Placeholder simple */}
-                    <div className="absolute inset-0 flex items-center justify-center text-5xl font-black text-white/5 select-none">
-                      {video.title.substring(0, 2).toUpperCase()}
-                    </div>
-                  </div>
+            <h4 className="text-xl font-semibold mb-3">Cursos Variados</h4>
+            <p className="text-gray-400">
+              Matemáticas, física, química, idiomas y más. Encuentra lo que necesitas.
+            </p>
+          </div>
 
-                  <div className="p-7 flex-1 flex flex-col">
-                    <div className="flex justify-between items-start gap-4 mb-4">
-                      <h3
-                        className="font-bold text-xl line-clamp-2 leading-snug cursor-pointer hover:text-blue-400 transition-colors"
-                        onClick={() => router.push(`/watch/${encodeURIComponent(video.id)}`)}
-                      >
-                        {video.title}
-                      </h3>
-                      {isAdmin && (
-                        <button
-                          onClick={() => handleDelete(video.id)}
-                          className="text-gray-600 hover:text-red-500 transition-colors p-1"
-                          title="Eliminar"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                        </button>
-                      )}
-                    </div>
-
-                    <p className="text-gray-400 text-sm line-clamp-3 mb-8 flex-1 leading-relaxed">
-                      {video.summary?.fullSummary || "Análisis en proceso o información no disponible."}
-                    </p>
-
-                    <button
-                      onClick={() => router.push(`/watch/${encodeURIComponent(video.id)}`)}
-                      className="w-full py-3.5 bg-white/5 hover:bg-white/10 rounded-2xl text-sm font-bold transition-all border border-white/5 hover:border-blue-500/20"
-                    >
-                      Ver Resumen Completo
-                    </button>
-                  </div>
-                </div>
-              ))}
+          <div className="bg-[#1a1c1e] rounded-3xl p-8 border border-white/5 hover:border-green-500/30 transition-colors">
+            <div className="w-14 h-14 bg-green-500/20 rounded-2xl flex items-center justify-center mb-6">
+              <Video className="text-green-400" size={28} />
             </div>
-          ) : (
-            <div className="text-center py-24 bg-[#1a1c1e] rounded-[3rem] border border-dashed border-white/5">
-              <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                <svg className="w-10 h-10 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold mb-2">No encontramos coincidencias</h3>
-              <p className="text-gray-400 max-w-sm mx-auto">Prueba buscando temas generales como "algoritmos", "clase" o por el título del video.</p>
-            </div>
-          )}
-        </section>
-      </div>
+            <h4 className="text-xl font-semibold mb-3">Clases Grabadas</h4>
+            <p className="text-gray-400">
+              Accede a las grabaciones de tus clases con resúmenes generados por IA.
+            </p>
+          </div>
+        </div>
+      </section>
 
-      <footer className="border-t border-white/5 py-12 text-center text-gray-600 text-sm">
-        <p>&copy; 2024 Academia UPC - Todos los derechos reservados.</p>
+      {/* Contact Section */}
+      <section className="max-w-6xl mx-auto px-6 py-20">
+        <div className="bg-gradient-to-r from-green-600/20 to-green-500/10 rounded-3xl p-8 md:p-12 border border-green-500/20 text-center">
+          <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <MessageCircle className="text-green-400" size={32} />
+          </div>
+          <h3 className="text-2xl font-bold mb-4">¿Tienes preguntas?</h3>
+          <p className="text-gray-400 mb-6 max-w-lg mx-auto">
+            Contáctanos por WhatsApp y te ayudaremos con cualquier duda sobre nuestras tutorías.
+          </p>
+          <a
+            href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-3 bg-green-600 hover:bg-green-500 px-8 py-4 rounded-2xl font-semibold text-lg transition-colors"
+          >
+            <MessageCircle size={24} />
+            Escribir por WhatsApp
+          </a>
+          <p className="text-sm text-gray-500 mt-4">+506 6194 3970</p>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 py-8">
+        <div className="max-w-6xl mx-auto px-6 text-center text-gray-500 text-sm">
+          <p>© 2026 Academia UPC. Todos los derechos reservados.</p>
+        </div>
       </footer>
     </main>
   );

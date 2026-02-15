@@ -9,6 +9,8 @@ export interface VideoData {
     summary: VideoSummary;
     parts?: string[]; // Para videos divididos en partes (Supabase 50MB limit)
     youtubeUrl?: string; // Link de YouTube opcional
+    processingStatus?: 'completed' | 'partial_transcription_error' | 'partial_summary_error' | 'failed';
+    classId?: string;
     createdAt: string;
 }
 
